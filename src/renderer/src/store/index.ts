@@ -5,6 +5,7 @@ import { createPlayerSlice, type PlayerSlice } from './playerSlice';
 import { createFoldersSlice, type FoldersSlice } from './foldersSlice';
 import { createSettingsSlice, type SettingsSlice } from './settingsSlice';
 import { createScanSlice, type ScanSlice } from './scanSlice';
+import { createUiSlice, type UiSlice } from './uiSlice';
 
 export interface Store
   extends LibrarySlice,
@@ -12,7 +13,8 @@ export interface Store
     PlayerSlice,
     FoldersSlice,
     SettingsSlice,
-    ScanSlice {}
+    ScanSlice,
+    UiSlice {}
 
 export const useStore = create<Store>()((...args) => ({
   ...createLibrarySlice(...args),
@@ -20,5 +22,6 @@ export const useStore = create<Store>()((...args) => ({
   ...createPlayerSlice(...args),
   ...createFoldersSlice(...args),
   ...createSettingsSlice(...args),
-  ...createScanSlice(...args)
+  ...createScanSlice(...args),
+  ...createUiSlice(...args)
 }));

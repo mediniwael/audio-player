@@ -75,6 +75,7 @@ export async function play(
 
   // Persist the cursor for this context.
   if (context.kind === 'playlist') {
+    store.setPlaylistCursor(context.playlistId, context.entryId);
     void window.api.playlists.setCurrent(context.playlistId, context.entryId);
   } else {
     store.setLibraryCursor(track.id);

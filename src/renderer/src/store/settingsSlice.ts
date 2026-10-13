@@ -6,6 +6,7 @@ export interface SettingsSlice {
 
   loadSettings: () => Promise<void>;
   setSetting: (key: string, value: string) => Promise<void>;
+  loadLastView: () => Promise<void>;
 }
 
 export const createSettingsSlice: StateCreator<
@@ -13,7 +14,7 @@ export const createSettingsSlice: StateCreator<
   [],
   [],
   SettingsSlice
-> = (set) => ({
+> = (set, get) => ({
   settingsLoaded: false,
 
   loadSettings: async () => {
@@ -25,5 +26,16 @@ export const createSettingsSlice: StateCreator<
 
   setSetting: async (key, value) => {
     await window.api.settings.set(key, value);
+  },
+
+  loadLastView: async () => {
+  const value = await window.api.settings.get('library.last_view');
+  if (!value) return;
+  if (value.startsWith('playlist:')) {
+    const id = Number(value.slice('playlist:'.length));
+    if (Number.isFinite(id)) {
+      await get().loadActivePlaylist(id);
+    }
   }
+},
 });

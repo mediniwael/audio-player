@@ -51,6 +51,9 @@ export async function open(userDataDir: string): Promise<void> {
     : new SQL.Database();
 
   db.run('PRAGMA foreign_keys = ON;');
+
+  const fkRow = db.exec('PRAGMA foreign_keys;');
+  console.log('[db] foreign_keys =', fkRow);
   migrate();
 }
 
@@ -303,7 +306,34 @@ export function addFolders(paths: string[]): Folder[] {
 }
 
 export function removeFolder(id: number): void {
-  run('DELETE FROM folders WHERE id = ?', [id]);
+  const database = requireDb();
+  database.run('BEGIN');
+  try {
+    // Find the tracks in this folder so we can clean up their playlist
+    // entries explicitly.
+    const trackRows = queryAll<{ id: number }>(
+      'SELECT id FROM tracks WHERE folder_id = ?',
+      [id]
+    );
+    if (trackRows.length > 0) {
+      const CHUNK = 500;
+      for (let i = 0; i < trackRows.length; i += CHUNK) {
+        const chunk = trackRows.slice(i, i + CHUNK).map((r) => r.id);
+        const placeholders = chunk.map(() => '?').join(',');
+        database.run(
+          `DELETE FROM playlist_tracks WHERE track_id IN (${placeholders})`,
+          chunk
+        );
+      }
+    }
+    database.run('DELETE FROM tracks WHERE folder_id = ?', [id]);
+    database.run('DELETE FROM folders WHERE id = ?', [id]);
+    database.run('COMMIT');
+  } catch (err) {
+    database.run('ROLLBACK');
+    throw err;
+  }
+  markDirty();
 }
 
 // ---------- Tracks ----------
@@ -442,12 +472,31 @@ export function deleteTracksByPath(folderId: number, paths: string[]): void {
   if (paths.length === 0) return;
   const database = requireDb();
 
-  const CHUNK = 500; // SQLITE_MAX_VARIABLE_NUMBER is 999 on older builds
+  const CHUNK = 500;
   database.run('BEGIN');
   try {
     for (let i = 0; i < paths.length; i += CHUNK) {
       const chunk = paths.slice(i, i + CHUNK);
+
+      // Find track ids for these paths.
       const placeholders = chunk.map(() => '?').join(',');
+      const trackRows = queryAll<{ id: number }>(
+        `SELECT id FROM tracks
+         WHERE folder_id = ? AND path IN (${placeholders})`,
+        [folderId, ...chunk]
+      );
+
+      // Clean up playlist entries for those tracks.
+      if (trackRows.length > 0) {
+        const trackIds = trackRows.map((r) => r.id);
+        const trackPlaceholders = trackIds.map(() => '?').join(',');
+        database.run(
+          `DELETE FROM playlist_tracks WHERE track_id IN (${trackPlaceholders})`,
+          trackIds
+        );
+      }
+
+      // Delete the tracks themselves.
       database.run(
         `DELETE FROM tracks WHERE folder_id = ? AND path IN (${placeholders})`,
         [folderId, ...chunk]
@@ -507,7 +556,20 @@ export function renamePlaylist(id: number, name: string): void {
 }
 
 export function removePlaylist(id: number): void {
-  run('DELETE FROM playlists WHERE id = ?', [id]);
+  const database = requireDb();
+  database.run('BEGIN');
+  try {
+    // Explicit cascade. The FK cascade should handle this, but SQLite's
+    // PRAGMA foreign_keys is connection-scoped and can be reset by tools
+    // or driver quirks. Doing it by hand guarantees correctness.
+    database.run('DELETE FROM playlist_tracks WHERE playlist_id = ?', [id]);
+    database.run('DELETE FROM playlists WHERE id = ?', [id]);
+    database.run('COMMIT');
+  } catch (err) {
+    database.run('ROLLBACK');
+    throw err;
+  }
+  markDirty();
 }
 
 interface PlaylistEntryRow {
