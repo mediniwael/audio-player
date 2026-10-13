@@ -1,6 +1,7 @@
 import { useStore } from '../store';
 import type { PlaylistEntry } from '../../../shared/api';
 import { JSX } from 'react/jsx-runtime';
+import { basename, formatDuration } from '../utils/format';
 
 interface Props {
     entry: PlaylistEntry;
@@ -65,7 +66,7 @@ export default function PlaylistEntryRow({
             <span className="drag-handle" title="Drag to reorder">⋮⋮</span>
             <div className="track-main">
                 <div className="track-title">
-                    {entry.track.title ?? '(untitled)'}
+                    {basename(entry.track.path)}
                     {isCurrent && isPlaying && <span className="playing-dot">●</span>}
                 </div>
                 <div className="track-meta">
@@ -73,6 +74,9 @@ export default function PlaylistEntryRow({
                     {entry.track.artist && entry.track.album ? ' — ' : ''}
                     {entry.track.album ?? ''}
                 </div>
+            </div>
+            <div className="track-duration">
+                {formatDuration(entry.track.duration)}
             </div>
         </li>
     );

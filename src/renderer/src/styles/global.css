@@ -592,3 +592,25 @@ button:disabled {
 .filtered-folder-name {
     color: var(--accent);
 }
+
+.track-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.track-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.track-duration {
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+}

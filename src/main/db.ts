@@ -44,11 +44,9 @@ const naturalCollator = new Intl.Collator(undefined, {
 // when two tracks share a title.
 function sortTracks(tracks: Track[]): Track[] {
   return [...tracks].sort((a, b) => {
-    const aKey = (a.title ?? a.path).trim();
-    const bKey = (b.title ?? b.path).trim();
-    const primary = naturalCollator.compare(aKey, bKey);
-    if (primary !== 0) return primary;
-    return naturalCollator.compare(a.path, b.path);
+    const aName = path.basename(a.path);
+    const bName = path.basename(b.path);
+    return naturalCollator.compare(aName, bName);
   });
 }
 

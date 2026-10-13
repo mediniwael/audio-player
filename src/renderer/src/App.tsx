@@ -8,6 +8,7 @@ import PlaylistsSidebar from './components/PlaylistsSidebar';
 import PlaylistView from './components/PlaylistView';
 import ContextMenu from './components/ContextMenu';
 import type { Track } from '../../shared/api';
+import { basename, formatDuration } from './utils/format';
 
 export default function App(): JSX.Element {
   useKeyboardShortcuts();
@@ -250,14 +251,15 @@ export default function App(): JSX.Element {
                         });
                       }}
                     >
-                      <div className="track-title">
-                        {t.title ?? '(untitled)'}
+                      <div className="track-main">
+                        <div className="track-title">{basename(t.path)}</div>
+                        <div className="track-meta">
+                          {t.artist ?? ''}
+                          {t.artist && t.album ? ' — ' : ''}
+                          {t.album ?? ''}
+                        </div>
                       </div>
-                      <div className="track-meta">
-                        {t.artist ?? ''}
-                        {t.artist && t.album ? ' — ' : ''}
-                        {t.album ?? ''}
-                      </div>
+                      <div className="track-duration">{formatDuration(t.duration)}</div>
                     </li>
                   ))}
                 </ul>
