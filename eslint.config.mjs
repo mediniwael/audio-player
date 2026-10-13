@@ -27,8 +27,7 @@ export default defineConfig(
       ...eslintPluginReactHooks.configs.recommended.rules,
       ...eslintPluginReactRefresh.configs.vite.rules,
       'no-unused-vars': 'off',
-      'end-of-line':'auto',
-
+      'end-of-line': 'auto'
     }
   },
   eslintConfigPrettier
