@@ -16,11 +16,11 @@ export function buildVoiceBoostChain(ctx: AudioContext): VoiceBoostChain {
   presence.gain.value = 4;
 
   const compressor = ctx.createDynamicsCompressor();
-    compressor.threshold.value = -40;
-    compressor.knee.value = 6;
-    compressor.ratio.value = 12;
-    compressor.attack.value = 0.003;
-    compressor.release.value = 0.25;
+    compressor.threshold.value = -28;   // catch normal speech peaks
+    compressor.knee.value      = 12;    // soft, musical transition
+    compressor.ratio.value     = 4;     // gentle control, not limiting
+    compressor.attack.value    = 0.006; // ~6ms — lets consonants through, catches peaks
+    compressor.release.value   = 0.20;  // recovers before the next syllable
 
   highpass.connect(presence);
   presence.connect(compressor);

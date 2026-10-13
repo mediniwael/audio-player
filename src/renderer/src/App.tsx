@@ -1,4 +1,4 @@
-import { JSX, useEffect } from 'react';
+import { JSX, useEffect, useMemo } from 'react';
 import { useStore } from './store';
 import { play } from './controllers/mediaController';
 import MediaSurface from './components/MediaSurface';
@@ -9,6 +9,7 @@ export default function App(): JSX.Element {
   const folders = useStore((s) => s.folders);
   const tracks = useStore((s) => s.libraryTracks);
   const currentTrackId = useStore((s) => s.currentTrack?.id ?? null);
+  const libraryCursorTrackId = useStore((s) => s.libraryCursorTrackId);
   const isScanning = useStore((s) => s.isScanning);
   const scanFolderPath = useStore((s) => s.scanFolderPath);
   const scanProcessed = useStore((s) => s.scanProcessed);
@@ -17,17 +18,31 @@ export default function App(): JSX.Element {
   const addFolder = useStore((s) => s.addFolder);
   const removeFolder = useStore((s) => s.removeFolder);
   const loadLibrary = useStore((s) => s.loadLibrary);
+  const loadLibraryCursor = useStore((s) => s.loadLibraryCursor);
   const startScan = useStore((s) => s.startScan);
   const loadSettings = useStore((s) => s.loadSettings);
 
   useEffect(() => {
     loadFolders();
     loadLibrary();
+    loadLibraryCursor();
     loadSettings();
-  }, [loadFolders, loadLibrary, loadSettings]);
+  }, [loadFolders, loadLibrary, loadLibraryCursor, loadSettings]);
+
+  // The track the Continue button would resume, if any.
+  const continueTrack = useMemo<Track | null>(() => {
+    if (libraryCursorTrackId === null) return null;
+    return tracks.find((t) => t.id === libraryCursorTrackId) ?? null;
+  }, [tracks, libraryCursorTrackId]);
 
   function handlePlay(track: Track): void {
     void play(track, { kind: 'library' });
+  }
+
+  function handleContinue(): void {
+    if (continueTrack) {
+      void play(continueTrack, { kind: 'library' });
+    }
   }
 
   return (
@@ -64,6 +79,20 @@ export default function App(): JSX.Element {
         </aside>
 
         <main className="main-pane">
+          {continueTrack && (
+            <div className="continue-banner">
+              <div className="continue-info">
+                <span className="continue-label">Continue listening</span>
+                <span className="continue-title">
+                  {continueTrack.title ?? '(untitled)'}
+                </span>
+              </div>
+              <button className="continue-btn" onClick={handleContinue}>
+                ▶ Resume
+              </button>
+            </div>
+          )}
+
           <h2>Library ({tracks.length})</h2>
           <ul className="track-list">
             {tracks.map((t) => (

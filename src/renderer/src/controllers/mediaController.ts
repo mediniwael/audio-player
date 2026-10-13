@@ -1,8 +1,13 @@
 import { useStore } from '../store';
 import { ensureGraph, resumeContextIfNeeded } from './audioGraph';
+import { initResumeTracker, setResumeBaseline } from './resumeTracker';
 import type { PlayContext, Track } from '../../../shared/api';
 
 let el: HTMLVideoElement | null = null;
+
+export interface PlayOptions {
+  restart?: boolean;
+}
 
 export function getOrCreateElement(): HTMLVideoElement {
   if (el) return el;
@@ -18,6 +23,8 @@ export function getOrCreateElement(): HTMLVideoElement {
   el.addEventListener('ended', onEnded);
   el.addEventListener('error', onError);
 
+  initResumeTracker(el);
+
   return el;
 }
 
@@ -32,7 +39,11 @@ export function getElement(): HTMLVideoElement | null {
   return el;
 }
 
-export async function play(track: Track, context: PlayContext): Promise<void> {
+export async function play(
+  track: Track,
+  context: PlayContext,
+  options: PlayOptions = {}
+): Promise<void> {
   const mediaEl = getOrCreateElement();
   ensureGraph(mediaEl);
   await resumeContextIfNeeded();
@@ -41,16 +52,38 @@ export async function play(track: Track, context: PlayContext): Promise<void> {
   store.setCurrentTrack(track, context);
   store.setPlaying(true);
 
+  // Read the saved position BEFORE we set src, so the fetch isn't racing
+  // with the element's own loading pipeline.
+  const saved = options.restart
+    ? 0
+    : await window.api.tracks.getPosition(track.id);
+
   mediaEl.src = track.url;
-  mediaEl.playbackRate = store.playbackSpeed;   // ← add this
+  mediaEl.playbackRate = store.playbackSpeed;
+
+  await waitForMetadata(mediaEl);
+
+  // Apply resume position. The guard skips positions within 1 second of the
+  // end, which would otherwise start playback at the final frame.
+  if (saved > 0 && saved < mediaEl.duration - 1) {
+    mediaEl.currentTime = saved;
+  }
+
+  setResumeBaseline(mediaEl.currentTime);
 
   await mediaEl.play();
 
+  // Persist the cursor for this context.
   if (context.kind === 'playlist') {
-    window.api.playlists.setCurrent(context.playlistId, context.entryId).catch(() => {});
+    void window.api.playlists.setCurrent(context.playlistId, context.entryId);
   } else {
-    window.api.settings.set('library.current_track_id', String(track.id)).catch(() => {});
+    store.setLibraryCursor(track.id);
+    void window.api.settings.set('library.current_track_id', String(track.id));
   }
+}
+
+export function playFromStart(track: Track, context: PlayContext): Promise<void> {
+  return play(track, context, { restart: true });
 }
 
 export function togglePlayPause(): void {
@@ -72,6 +105,28 @@ export function setPlaybackRate(rate: number): void {
   el.playbackRate = rate;
 }
 
+// ---------- Metadata wait ----------
+
+function waitForMetadata(mediaEl: HTMLVideoElement): Promise<void> {
+  if (mediaEl.readyState >= HTMLMediaElement.HAVE_METADATA) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    const onLoaded = (): void => {
+      mediaEl.removeEventListener('loadedmetadata', onLoaded);
+      mediaEl.removeEventListener('error', onError);
+      resolve();
+    };
+    const onError = (): void => {
+      mediaEl.removeEventListener('loadedmetadata', onLoaded);
+      mediaEl.removeEventListener('error', onError);
+      reject(new Error('metadata load failed'));
+    };
+    mediaEl.addEventListener('loadedmetadata', onLoaded);
+    mediaEl.addEventListener('error', onError);
+  });
+}
+
 // ---------- Event handlers ----------
 
 function onLoadedMetadata(): void {
@@ -89,19 +144,17 @@ function onPause(): void {
 
 function onEnded(): void {
   useStore.getState().setPlaying(false);
-  // Advance to the next track in the current context.
-  advanceToNext().catch((err) => console.error('[media] advance failed:', err));
+  void advanceToNext();
 }
 
 function onError(): void {
-  const mediaEl = el;
-  if (!mediaEl) return;
-  const err = mediaEl.error;
+  if (!el) return;
+  const err = el.error;
   console.error(
     '[media] playback error:',
     err?.code,
     err?.message,
-    mediaEl.src
+    el.src
   );
   useStore.getState().setPlaying(false);
 }
@@ -117,13 +170,15 @@ async function advanceToNext(): Promise<void> {
   if (currentContext.kind === 'library') {
     const tracks = store.libraryTracks;
     const idx = tracks.findIndex((t) => t.id === currentTrack.id);
-    if (idx === -1 || idx === tracks.length - 1) return; // nothing to advance to
+    if (idx === -1 || idx === tracks.length - 1) return;
     const next = tracks[idx + 1];
     await play(next, currentContext);
   } else {
     const playlist = store.activePlaylist;
     if (!playlist) return;
-    const idx = playlist.entries.findIndex((e) => e.id === currentContext.entryId);
+    const idx = playlist.entries.findIndex(
+      (e) => e.id === currentContext.entryId
+    );
     if (idx === -1 || idx === playlist.entries.length - 1) return;
     const nextEntry = playlist.entries[idx + 1];
     await play(nextEntry.track, {
