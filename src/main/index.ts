@@ -4,6 +4,7 @@ import { pathToFileURL } from 'url';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import * as db from './db';
 import icon from '../../resources/icon.png?asset';
+import { registerIpcHandlers } from './ipc';
 
 function createWindow(): void {
   // Create the browser window.
@@ -55,12 +56,9 @@ app.whenReady().then(async () => {
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window);
   });
-  await db.open(app.getPath('userData'));
-  createWindow();
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+  await db.open(app.getPath('userData'));
+  registerIpcHandlers();   // ← add this
 
   protocol.handle('media', (request) => {
     console.log('[media] handler fired for:', request.url);
@@ -70,7 +68,13 @@ app.whenReady().then(async () => {
     return net.fetch(pathToFileURL(filePath).toString());
   });
 
+  createWindow();
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
 });
+
 
 app.on('before-quit', () => {
   try {

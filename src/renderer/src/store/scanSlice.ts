@@ -27,15 +27,20 @@ export const createScanSlice: StateCreator<
   lastScanResults: null,
 
   startScan: async () => {
-    set({
-      isScanning: true,
-      scanFolderPath: null,
-      scanProcessed: 0,
-      lastScanResults: null
-    });
+  set({
+    isScanning: true,
+    scanFolderPath: null,
+    scanProcessed: 0,
+    lastScanResults: null
+  });
+  try {
     const results = await window.api.library.scan();
     set({ isScanning: false, lastScanResults: results });
-  },
+  } catch (err) {
+    console.error('[scan] failed:', err);
+    set({ isScanning: false });
+  }
+},
 
   setScanFolder: (_folderId, path) =>
     set({ scanFolderPath: path, scanProcessed: 0 }),
