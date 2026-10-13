@@ -32,6 +32,26 @@ function toMediaUrl(absPath: string): string {
   return `media://file/${encodeURIComponent(absPath)}`;
 }
 
+// Natural sort collator. `numeric: true` makes "2" come before "10" instead
+// of after it, which is what humans expect for numbered files.
+const naturalCollator = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: 'base'
+});
+
+// Sort a list of tracks in natural order. Uses title if present, falling
+// back to the file path for tracks with no title tag. Path is the tiebreaker
+// when two tracks share a title.
+function sortTracks(tracks: Track[]): Track[] {
+  return [...tracks].sort((a, b) => {
+    const aKey = (a.title ?? a.path).trim();
+    const bKey = (b.title ?? b.path).trim();
+    const primary = naturalCollator.compare(aKey, bKey);
+    if (primary !== 0) return primary;
+    return naturalCollator.compare(a.path, b.path);
+  });
+}
+
 // ---------- Lifecycle ----------
 
 export async function open(userDataDir: string): Promise<void> {
@@ -376,7 +396,7 @@ export function listTracks(): Track[] {
     WHERE media_type = 'audio'
     ORDER BY path
   `);
-  return rows.map(rowToTrack);
+  return sortTracks(rows.map(rowToTrack));
 }
 
 export function listTracksInFolder(folderId: number): Track[] {
@@ -387,7 +407,7 @@ export function listTracksInFolder(folderId: number): Track[] {
      ORDER BY path`,
     [folderId]
   );
-  return rows.map(rowToTrack);
+  return sortTracks(rows.map(rowToTrack));
 }
 
 export function getTrackPosition(id: number): number {

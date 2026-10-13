@@ -23,6 +23,7 @@ export function getOrCreateElement(): HTMLVideoElement {
   el.addEventListener('ended', onEnded);
   el.addEventListener('error', onError);
 
+  installMediaSessionHandlers();
   initResumeTracker(el);
 
   return el;
@@ -49,7 +50,9 @@ export async function play(
   await resumeContextIfNeeded();
 
   const store = useStore.getState();
+  store.setPlaybackError(null);
   store.setCurrentTrack(track, context);
+  updateMediaSession(track);
   store.setPlaying(true);
 
   // Read the saved position BEFORE we set src, so the fetch isn't racing
@@ -137,10 +140,16 @@ function onLoadedMetadata(): void {
 
 function onPlaying(): void {
   useStore.getState().setPlaying(true);
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.playbackState = 'playing';
+  }
 }
 
 function onPause(): void {
   useStore.getState().setPlaying(false);
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.playbackState = 'paused';
+  }
 }
 
 function onEnded(): void {
@@ -151,13 +160,13 @@ function onEnded(): void {
 function onError(): void {
   if (!el) return;
   const err = el.error;
-  console.error(
-    '[media] playback error:',
-    err?.code,
-    err?.message,
-    el.src
+  const message = err?.message || 'Playback failed';
+  console.error('[media] playback error:', err?.code, message, el.src);
+  const store = useStore.getState();
+  store.setPlaying(false);
+  store.setPlaybackError(
+    `${store.currentTrack?.title ?? 'Track'}: ${message}`
   );
-  useStore.getState().setPlaying(false);
 }
 
 // ---------- Advancing ----------
@@ -188,4 +197,50 @@ async function advanceToNext(): Promise<void> {
       entryId: nextEntry.id
     });
   }
+}
+
+export function seekBy(deltaSeconds: number): void {
+  if (!el) return;
+  const duration = el.duration;
+  if (!isFinite(duration) || duration <= 0) return;
+  const next = Math.max(0, Math.min(duration, el.currentTime + deltaSeconds));
+  el.currentTime = next;
+}
+
+function updateMediaSession(track: Track): void {
+  if (!('mediaSession' in navigator)) return;
+
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: track.title ?? 'Unknown',
+    artist: track.artist ?? '',
+    album: track.album ?? ''
+  });
+}
+
+function installMediaSessionHandlers(): void {
+  if (!('mediaSession' in navigator)) return;
+
+  navigator.mediaSession.setActionHandler('play', () => {
+    if (!el) return;
+    void el.play();
+  });
+
+  navigator.mediaSession.setActionHandler('pause', () => {
+    if (!el) return;
+    el.pause();
+  });
+
+  navigator.mediaSession.setActionHandler('stop', () => {
+    if (!el) return;
+    el.pause();
+    el.currentTime = 0;
+  });
+
+  // Optional: only supported when the current context has a next track.
+  // The `advanceToNext` function knows, so we can just call it and let it
+  // decide. For a cleaner overlay, we could set the handler to null when
+  // there's nothing next — do that in a later polish pass.
+  navigator.mediaSession.setActionHandler('nexttrack', () => {
+    void advanceToNext();
+  });
 }

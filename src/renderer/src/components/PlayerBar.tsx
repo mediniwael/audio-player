@@ -7,13 +7,19 @@ import { JSX } from 'react/jsx-runtime';
 
 export default function PlayerBar(): JSX.Element {
     const track = useStore((s) => s.currentTrack);
+    const playbackError = useStore((s) => s.playbackError);
 
     return (
         <div className="player-bar">
             <div className="player-now-playing">
                 {track ? (
                     <>
-                        <div className="player-title">{track.title ?? '(untitled)'}</div>
+                        <div className="player-title">
+                            {track ? (track.title ?? '(untitled)') : 'No track'}
+                        </div>
+                        {playbackError && (
+                            <div className="player-error">{playbackError}</div>
+                        )}
                         <div className="player-subtitle">
                             {track.artist ?? ''}
                             {track.artist && track.album ? ' — ' : ''}

@@ -37,5 +37,9 @@ export const createFoldersSlice: StateCreator<
     // Removing a folder cascades to tracks in the database, so reload
     // the library to reflect the change.
     // (Wired up in Session 3.)
+    // If the filtered folder was the one removed, clear the filter.
+    if (get().libraryFolderFilter === id) {
+      set({ libraryFolderFilter: null });
+    }
   }
 });

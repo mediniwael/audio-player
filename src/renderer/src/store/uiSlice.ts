@@ -2,7 +2,7 @@ import type { StateCreator } from 'zustand';
 import type { Store } from './index';
 
 export interface ContextMenuTarget {
-  kind: 'library-track' | 'playlist-entry';
+  kind: 'library-track' | 'playlist-entry' | 'folder';
   id: number;
   x: number;
   y: number;

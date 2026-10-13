@@ -542,3 +542,53 @@ button:disabled {
     display: inline-flex;
     gap: 2px;
 }
+
+.error-hint {
+    color: #e06060;
+    padding: 16px;
+    background: #2a1a1a;
+    border: 1px solid #5a2222;
+    border-radius: 6px;
+    margin: 16px 0;
+}
+
+.player-error {
+    font-size: 11px;
+    color: #e06060;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.folder-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.folder-item:hover {
+    background: var(--bg-elevated);
+}
+
+.folder-item.active {
+    background: var(--accent-dim);
+}
+
+.library-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.library-header h2 {
+    margin: 0;
+}
+
+.filtered-folder-name {
+    color: var(--accent);
+}

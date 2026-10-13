@@ -1,6 +1,7 @@
 import { JSX, useEffect, useMemo } from 'react';
 import { useStore } from './store';
 import { play } from './controllers/mediaController';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import MediaSurface from './components/MediaSurface';
 import PlayerBar from './components/PlayerBar';
 import PlaylistsSidebar from './components/PlaylistsSidebar';
@@ -9,11 +10,17 @@ import ContextMenu from './components/ContextMenu';
 import type { Track } from '../../shared/api';
 
 export default function App(): JSX.Element {
+  useKeyboardShortcuts();
+
   // ---------- State ----------
   const folders = useStore((s) => s.folders);
   const libraryTracks = useStore((s) => s.libraryTracks);
-  const currentTrackId = useStore((s) => s.currentTrack?.id ?? null);
+  const libraryLoading = useStore((s) => s.libraryLoading);
+  const libraryLoaded = useStore((s) => s.libraryLoaded);
+  const libraryError = useStore((s) => s.libraryError);
+  const libraryFolderFilter = useStore((s) => s.libraryFolderFilter);
   const libraryCursorTrackId = useStore((s) => s.libraryCursorTrackId);
+  const currentTrackId = useStore((s) => s.currentTrack?.id ?? null);
   const activePlaylist = useStore((s) => s.activePlaylist);
   const isScanning = useStore((s) => s.isScanning);
   const scanFolderPath = useStore((s) => s.scanFolderPath);
@@ -30,6 +37,7 @@ export default function App(): JSX.Element {
   const loadSettings = useStore((s) => s.loadSettings);
   const startScan = useStore((s) => s.startScan);
   const openContextMenu = useStore((s) => s.openContextMenu);
+  const setLibraryFolderFilter = useStore((s) => s.setLibraryFolderFilter);
 
   // ---------- Startup ----------
   useEffect(() => {
@@ -48,12 +56,31 @@ export default function App(): JSX.Element {
   ]);
 
   // ---------- Derived ----------
-  // The track that the Continue banner would resume. Null if there's no
-  // cursor, or if the cursor points at a track that no longer exists.
+
+  // The track the Continue banner would resume.
   const continueTrack = useMemo<Track | null>(() => {
     if (libraryCursorTrackId === null) return null;
     return libraryTracks.find((t) => t.id === libraryCursorTrackId) ?? null;
   }, [libraryTracks, libraryCursorTrackId]);
+
+  // The library, filtered by the sidebar's active folder.
+  const filteredTracks = useMemo<Track[]>(() => {
+    if (libraryFolderFilter === null) return libraryTracks;
+    return libraryTracks.filter((t) => t.folder_id === libraryFolderFilter);
+  }, [libraryTracks, libraryFolderFilter]);
+
+  // The folder object for the active filter, if any.
+  const filteredFolder = useMemo(() => {
+    if (libraryFolderFilter === null) return null;
+    return folders.find((f) => f.id === libraryFolderFilter) ?? null;
+  }, [folders, libraryFolderFilter]);
+
+  // Short display name for the filtered folder.
+  const filteredFolderName = useMemo(() => {
+    if (!filteredFolder) return '';
+    const segments = filteredFolder.path.split(/[/\\]/).filter(Boolean);
+    return segments[segments.length - 1] ?? filteredFolder.path;
+  }, [filteredFolder]);
 
   // ---------- Handlers ----------
   function handlePlay(track: Track): void {
@@ -64,6 +91,12 @@ export default function App(): JSX.Element {
     if (continueTrack) {
       void play(continueTrack, { kind: 'library' });
     }
+  }
+
+  function toggleFolderFilter(folderId: number): void {
+    setLibraryFolderFilter(
+      libraryFolderFilter === folderId ? null : folderId
+    );
   }
 
   // ---------- Render ----------
@@ -89,26 +122,51 @@ export default function App(): JSX.Element {
             <div className="sidebar-section-header">
               <h2>Folders</h2>
             </div>
+
             {folders.length === 0 ? (
               <p className="empty-hint small">
                 No folders yet. Click "Add folder" to get started.
               </p>
             ) : (
               <ul className="folder-list">
-                {folders.map((f) => (
-                  <li key={f.id}>
-                    <span className="folder-path" title={f.path}>
-                      {f.path}
-                    </span>
-                    <button
-                      className="icon-btn small"
-                      onClick={() => removeFolder(f.id)}
-                      title="Remove folder"
+                {folders.map((f) => {
+                  const isActiveFilter = libraryFolderFilter === f.id;
+                  return (
+                    <li
+                      key={f.id}
+                      className={`folder-item ${isActiveFilter ? 'active' : ''}`}
+                      onClick={() => toggleFolderFilter(f.id)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        openContextMenu({
+                          kind: 'folder',
+                          id: f.id,
+                          x: e.clientX,
+                          y: e.clientY
+                        });
+                      }}
+                      title={
+                        isActiveFilter
+                          ? 'Click to show all tracks'
+                          : 'Click to filter library by this folder'
+                      }
                     >
-                      ×
-                    </button>
-                  </li>
-                ))}
+                      <span className="folder-path" title={f.path}>
+                        {f.path}
+                      </span>
+                      <button
+                        className="icon-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFolder(f.id);
+                        }}
+                        title="Remove folder"
+                      >
+                        ×
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
@@ -135,15 +193,48 @@ export default function App(): JSX.Element {
                 </div>
               )}
 
-              <h2>Library ({libraryTracks.length})</h2>
+              <div className="library-header">
+                <h2>
+                  {filteredFolder ? (
+                    <>
+                      Library —{' '}
+                      <span className="filtered-folder-name">
+                        {filteredFolderName}
+                      </span>{' '}
+                      ({filteredTracks.length} of {libraryTracks.length})
+                    </>
+                  ) : (
+                    <>Library ({libraryTracks.length})</>
+                  )}
+                </h2>
+                {filteredFolder && (
+                  <button
+                    className="link-btn"
+                    onClick={() => setLibraryFolderFilter(null)}
+                  >
+                    Clear filter
+                  </button>
+                )}
+              </div>
 
-              {libraryTracks.length === 0 ? (
+              {libraryError ? (
+                <p className="error-hint">
+                  Failed to load library: {libraryError}
+                  <button className="link-btn" onClick={loadLibrary}>
+                    Retry
+                  </button>
+                </p>
+              ) : libraryLoading && !libraryLoaded ? (
+                <p className="empty-hint">Loading library…</p>
+              ) : libraryTracks.length === 0 ? (
                 <p className="empty-hint">
                   No tracks yet. Add a folder and rescan the library.
                 </p>
+              ) : filteredTracks.length === 0 ? (
+                <p className="empty-hint">No tracks in this folder.</p>
               ) : (
                 <ul className="track-list">
-                  {libraryTracks.map((t) => (
+                  {filteredTracks.map((t) => (
                     <li
                       key={t.id}
                       className={`track-row ${t.id === currentTrackId ? 'active' : ''
