@@ -1,10 +1,31 @@
-import { app, shell, BrowserWindow,  protocol, net } from 'electron';
+import { app, shell, BrowserWindow,  protocol } from 'electron';
 import { join } from 'path';
-import { pathToFileURL } from 'url';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import * as db from './db';
 import icon from '../../resources/icon.png?asset';
 import { registerIpcHandlers } from './ipc';
+import fs from 'fs/promises';
+import { extname } from 'path';
+
+const MIME_TYPES: Record<string, string> = {
+  '.mp3': 'audio/mpeg',
+  '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac',
+  '.flac': 'audio/flac',
+  '.wav': 'audio/wav',
+  '.ogg': 'audio/ogg',
+  '.opus': 'audio/ogg',
+  '.wma': 'audio/x-ms-wma',
+  '.aiff': 'audio/aiff',
+  '.mp4': 'video/mp4',
+  '.m4v': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mkv': 'video/x-matroska'
+};
+
+function mimeFor(filePath: string): string {
+  return MIME_TYPES[extname(filePath).toLowerCase()] ?? 'application/octet-stream';
+}
 
 function createWindow(): void {
   // Create the browser window.
@@ -58,14 +79,80 @@ app.whenReady().then(async () => {
   });
 
   await db.open(app.getPath('userData'));
-  registerIpcHandlers();   // ← add this
+  registerIpcHandlers();
 
-  protocol.handle('media', (request) => {
-    console.log('[media] handler fired for:', request.url);
+  protocol.handle('media', async (request) => {
     const url = new URL(request.url);
     const filePath = decodeURIComponent(url.pathname.slice(1));
-    console.log('[media] resolved to:', filePath);
-    return net.fetch(pathToFileURL(filePath).toString());
+
+    let stat;
+    try {
+      stat = await fs.stat(filePath);
+    } catch {
+      return new Response('Not found', { status: 404 });
+    }
+
+    const total = stat.size;
+    const rangeHeader = request.headers.get('range');
+
+    if (rangeHeader) {
+      // Format: "bytes=START-END", or "bytes=START-", or "bytes=-SUFFIX"
+      const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
+      if (!match) {
+        return new Response('Invalid range', { status: 416 });
+      }
+
+      let start: number;
+      let end: number;
+
+      if (match[1] === '' && match[2] !== '') {
+        // Suffix range: last N bytes
+        const suffix = parseInt(match[2], 10);
+        start = Math.max(0, total - suffix);
+        end = total - 1;
+      } else {
+        start = parseInt(match[1], 10);
+        end = match[2] !== '' ? parseInt(match[2], 10) : total - 1;
+      }
+
+      if (start >= total || end >= total || start > end) {
+        return new Response('Range not satisfiable', {
+          status: 416,
+          headers: { 'Content-Range': `bytes */${total}` }
+        });
+      }
+
+      const chunkSize = end - start + 1;
+      const handle = await fs.open(filePath, 'r');
+      try {
+        const buffer = Buffer.alloc(chunkSize);
+        await handle.read(buffer, 0, chunkSize, start);
+
+        return new Response(buffer, {
+          status: 206,
+          headers: {
+            'Content-Type': mimeFor(filePath),
+            'Content-Length': String(chunkSize),
+            'Content-Range': `bytes ${start}-${end}/${total}`,
+            'Accept-Ranges': 'bytes'
+          }
+        });
+      } finally {
+        await handle.close();
+      }
+    }
+
+    // No Range header — return the whole file with Accept-Ranges advertised
+    // so the client knows it can ask for ranges later.
+    const data = await fs.readFile(filePath);
+    return new Response(data, {
+      status: 200,
+      headers: {
+        'Content-Type': mimeFor(filePath),
+        'Content-Length': String(total),
+        'Accept-Ranges': 'bytes'
+      }
+    });
   });
 
   createWindow();
