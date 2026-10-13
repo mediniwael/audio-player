@@ -2,7 +2,7 @@ import { app, shell, BrowserWindow,  protocol, net } from 'electron';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
-
+import * as db from './db';
 import icon from '../../resources/icon.png?asset';
 
 function createWindow(): void {
@@ -55,7 +55,7 @@ app.whenReady().then(async () => {
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window);
   });
-  
+  await db.open(app.getPath('userData'));
   createWindow();
 
   app.on('activate', () => {
@@ -70,6 +70,14 @@ app.whenReady().then(async () => {
     return net.fetch(pathToFileURL(filePath).toString());
   });
 
+});
+
+app.on('before-quit', () => {
+  try {
+    db.closeSync();
+  } catch (err) {
+    console.error('Failed to close database:', err);
+  }
 });
 
 app.on('window-all-closed', () => {
