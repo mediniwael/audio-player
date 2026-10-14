@@ -1,5 +1,5 @@
 import { useStore } from '../store';
-import { ensureGraph, resumeContextIfNeeded } from './audioGraph';
+import { ensureGraph, resumeContextIfNeeded, setVoiceBoost } from './audioGraph';
 import { initResumeTracker, setResumeBaseline } from './resumeTracker';
 import type { PlayContext, Track } from '../../../shared/api';
 
@@ -52,6 +52,10 @@ export async function play(
   const store = useStore.getState();
   store.setPlaybackError(null);
   store.setCurrentTrack(track, context);
+  const wantsBoost = track.media_type === 'video'
+  ? false
+  : store.voiceBoost;
+  setVoiceBoost(wantsBoost);  
   updateMediaSession(track);
   store.setPlaying(true);
 
@@ -63,6 +67,7 @@ export async function play(
 
   mediaEl.src = track.url;
   mediaEl.playbackRate = store.playbackSpeed;
+  mediaEl.controls = track.media_type === 'video';
 
   await waitForMetadata(mediaEl);
 
@@ -243,4 +248,32 @@ function installMediaSessionHandlers(): void {
   navigator.mediaSession.setActionHandler('nexttrack', () => {
     void advanceToNext();
   });
+}
+
+export async function enterFullscreen(): Promise<void> {
+  if (!el) return;
+  try {
+    await el.requestFullscreen();
+  } catch (err) {
+    console.error('[media] fullscreen failed:', err);
+  }
+}
+
+export function exitFullscreen(): void {
+  if (document.fullscreenElement) {
+    void document.exitFullscreen();
+  }
+}
+
+export async function togglePictureInPicture(): Promise<void> {
+  if (!el) return;
+  try {
+    if (document.pictureInPictureElement === el) {
+      await document.exitPictureInPicture();
+    } else {
+      await el.requestPictureInPicture();
+    }
+  } catch (err) {
+    console.error('[media] PiP failed:', err);
+  }
 }

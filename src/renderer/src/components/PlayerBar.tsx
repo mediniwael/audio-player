@@ -1,4 +1,8 @@
 import { useStore } from '../store';
+import {
+    enterFullscreen,
+    togglePictureInPicture
+} from '../controllers/mediaController';
 import SeekBar from './SeekBar';
 import TransportControls from './TransportControls';
 import VoiceBoostToggle from './VoiceBoostToggle';
@@ -7,19 +11,14 @@ import { JSX } from 'react/jsx-runtime';
 
 export default function PlayerBar(): JSX.Element {
     const track = useStore((s) => s.currentTrack);
-    const playbackError = useStore((s) => s.playbackError);
+    const isVideo = track?.media_type === 'video';
 
     return (
         <div className="player-bar">
             <div className="player-now-playing">
                 {track ? (
                     <>
-                        <div className="player-title">
-                            {track ? (track.title ?? '(untitled)') : 'No track'}
-                        </div>
-                        {playbackError && (
-                            <div className="player-error">{playbackError}</div>
-                        )}
+                        <div className="player-title">{track.title ?? '(untitled)'}</div>
                         <div className="player-subtitle">
                             {track.artist ?? ''}
                             {track.artist && track.album ? ' — ' : ''}
@@ -36,6 +35,26 @@ export default function PlayerBar(): JSX.Element {
 
             <div className="player-right">
                 <SpeedDropdown />
+                {isVideo && (
+                    <>
+                        <button
+                            className="icon-btn"
+                            onClick={() => void togglePictureInPicture()}
+                            title="Picture in picture"
+                        >
+                            ⧉
+                        </button>
+                        <button
+                            className="icon-btn"
+                            onClick={() => {
+                                void enterFullscreen();
+                            }}
+                            title="Fullscreen"
+                        >
+                            ⛶
+                        </button>
+                    </>
+                )}
                 <VoiceBoostToggle />
             </div>
         </div>

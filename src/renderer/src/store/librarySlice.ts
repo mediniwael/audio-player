@@ -2,6 +2,8 @@ import type { StateCreator } from 'zustand';
 import type { Track } from '../../../shared/api';
 import type { Store } from './index';
 
+export type MediaFilter = 'all' | 'audio' | 'video';
+
 export interface LibrarySlice {
   libraryTracks: Track[];
   libraryLoaded: boolean;
@@ -9,7 +11,9 @@ export interface LibrarySlice {
   libraryCursorTrackId: number | null;
   libraryError: string | null;
   libraryFolderFilter: number | null;
+  libraryMediaFilter: MediaFilter;
 
+  setLibraryMediaFilter: (filter: MediaFilter) => void;
   setLibraryFolderFilter: (folderId: number | null) => void;
   loadLibrary: () => Promise<void>;
   setLibraryTracks: (tracks: Track[]) => void;
@@ -29,7 +33,9 @@ export const createLibrarySlice: StateCreator<
   libraryCursorTrackId: null,
   libraryError: null,
   libraryFolderFilter: null,
+  libraryMediaFilter: 'all',
 
+  setLibraryMediaFilter: (filter) => set({ libraryMediaFilter: filter }),
   setLibraryFolderFilter: (folderId) => set({ libraryFolderFilter: folderId }),
   loadLibrary: async () => {
   set({ libraryLoading: true, libraryError: null });

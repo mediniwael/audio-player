@@ -391,7 +391,6 @@ export function listTracks(): Track[] {
   const rows = queryAll<TrackRow>(`
     SELECT ${TRACK_COLUMNS}
     FROM tracks
-    WHERE media_type = 'audio'
     ORDER BY path
   `);
   return sortTracks(rows.map(rowToTrack));
@@ -401,7 +400,7 @@ export function listTracksInFolder(folderId: number): Track[] {
   const rows = queryAll<TrackRow>(
     `SELECT ${TRACK_COLUMNS}
      FROM tracks
-     WHERE folder_id = ? AND media_type = 'audio'
+     WHERE folder_id = ?
      ORDER BY path`,
     [folderId]
   );

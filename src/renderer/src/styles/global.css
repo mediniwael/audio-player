@@ -614,3 +614,114 @@ button:disabled {
     color: var(--text-dim);
     font-variant-numeric: tabular-nums;
 }
+
+/* Video panel in the main pane */
+.media-surface.video {
+    position: relative;
+    width: 100%;
+    max-height: 60vh;
+    background: #000;
+    margin-bottom: 16px;
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.media-surface.video video {
+    max-width: 100%;
+    max-height: 60vh;
+    display: block;
+}
+
+/* Media filter segmented control */
+.media-filter {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.media-filter button {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: var(--text-dim);
+    cursor: pointer;
+}
+
+.media-filter button:hover {
+    color: var(--text);
+}
+
+.media-filter button.active {
+    background: var(--accent-dim);
+    color: #fff;
+}
+
+/* Video badge on track rows */
+.video-badge {
+    display: inline-block;
+    margin-right: 6px;
+    font-size: 10px;
+    color: var(--accent);
+    vertical-align: middle;
+}
+
+/* Collapsible section header */
+.sidebar-section-header.collapsible {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 4px 6px;
+    margin: 0 0 4px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+    user-select: none;
+}
+
+.sidebar-section-header.collapsible:hover {
+    background: var(--bg-elevated);
+}
+
+.collapse-chevron {
+    display: inline-block;
+    width: 12px;
+    font-size: 10px;
+    color: var(--text-dim);
+    transition: transform 0.1s ease;
+}
+
+.section-title {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+    flex: 1;
+}
+
+.section-count {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    padding: 0 4px;
+}
+
+.filter-indicator {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-left: 2px;
+}

@@ -1,17 +1,19 @@
-import { JSX, useEffect, useMemo } from 'react';
+import { JSX, useEffect, useMemo, useState } from 'react';
 import { useStore } from './store';
 import { play } from './controllers/mediaController';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { basename, formatDuration } from './utils/format';
 import MediaSurface from './components/MediaSurface';
 import PlayerBar from './components/PlayerBar';
 import PlaylistsSidebar from './components/PlaylistsSidebar';
 import PlaylistView from './components/PlaylistView';
 import ContextMenu from './components/ContextMenu';
 import type { Track } from '../../shared/api';
-import { basename, formatDuration } from './utils/format';
 
 export default function App(): JSX.Element {
   useKeyboardShortcuts();
+
+  const [foldersExpanded, setFoldersExpanded] = useState(false);
 
   // ---------- State ----------
   const folders = useStore((s) => s.folders);
@@ -20,6 +22,7 @@ export default function App(): JSX.Element {
   const libraryLoaded = useStore((s) => s.libraryLoaded);
   const libraryError = useStore((s) => s.libraryError);
   const libraryFolderFilter = useStore((s) => s.libraryFolderFilter);
+  const libraryMediaFilter = useStore((s) => s.libraryMediaFilter);
   const libraryCursorTrackId = useStore((s) => s.libraryCursorTrackId);
   const currentTrackId = useStore((s) => s.currentTrack?.id ?? null);
   const activePlaylist = useStore((s) => s.activePlaylist);
@@ -39,6 +42,7 @@ export default function App(): JSX.Element {
   const startScan = useStore((s) => s.startScan);
   const openContextMenu = useStore((s) => s.openContextMenu);
   const setLibraryFolderFilter = useStore((s) => s.setLibraryFolderFilter);
+  const setLibraryMediaFilter = useStore((s) => s.setLibraryMediaFilter);
 
   // ---------- Startup ----------
   useEffect(() => {
@@ -64,13 +68,22 @@ export default function App(): JSX.Element {
     return libraryTracks.find((t) => t.id === libraryCursorTrackId) ?? null;
   }, [libraryTracks, libraryCursorTrackId]);
 
-  // The library, filtered by the sidebar's active folder.
+  // The library, filtered by folder and media type.
   const filteredTracks = useMemo<Track[]>(() => {
-    if (libraryFolderFilter === null) return libraryTracks;
-    return libraryTracks.filter((t) => t.folder_id === libraryFolderFilter);
-  }, [libraryTracks, libraryFolderFilter]);
+    let result = libraryTracks;
 
-  // The folder object for the active filter, if any.
+    if (libraryFolderFilter !== null) {
+      result = result.filter((t) => t.folder_id === libraryFolderFilter);
+    }
+
+    if (libraryMediaFilter !== 'all') {
+      result = result.filter((t) => t.media_type === libraryMediaFilter);
+    }
+
+    return result;
+  }, [libraryTracks, libraryFolderFilter, libraryMediaFilter]);
+
+  // The folder object for the active folder filter, if any.
   const filteredFolder = useMemo(() => {
     if (libraryFolderFilter === null) return null;
     return folders.find((f) => f.id === libraryFolderFilter) ?? null;
@@ -82,6 +95,11 @@ export default function App(): JSX.Element {
     const segments = filteredFolder.path.split(/[/\\]/).filter(Boolean);
     return segments[segments.length - 1] ?? filteredFolder.path;
   }, [filteredFolder]);
+
+  // Whether any filter is active — used to decide if the "Clear filter"
+  // link should appear.
+  const hasActiveFilter =
+    libraryFolderFilter !== null || libraryMediaFilter !== 'all';
 
   // ---------- Handlers ----------
   function handlePlay(track: Track): void {
@@ -100,11 +118,14 @@ export default function App(): JSX.Element {
     );
   }
 
+  function clearAllFilters(): void {
+    setLibraryFolderFilter(null);
+    setLibraryMediaFilter('all');
+  }
+
   // ---------- Render ----------
   return (
     <div className="app">
-      <MediaSurface />
-
       <header className="app-header">
         <button onClick={addFolder}>Add folder</button>
         <button onClick={startScan} disabled={isScanning}>
@@ -120,55 +141,76 @@ export default function App(): JSX.Element {
       <div className="app-body">
         <aside className="sidebar">
           <div className="sidebar-section">
-            <div className="sidebar-section-header">
-              <h2>Folders</h2>
-            </div>
+            <button
+              type="button"
+              className="sidebar-section-header collapsible"
+              onClick={() => setFoldersExpanded((v) => !v)}
+              aria-expanded={foldersExpanded}
+            >
+              <span className="collapse-chevron" aria-hidden="true">
+                {foldersExpanded ? '▾' : '▸'}
+              </span>
+              <span className="section-title">Folders</span>
+              <span className="section-count">{folders.length}</span>
+              {libraryFolderFilter !== null && (
+                <span
+                  className="filter-indicator"
+                  title="Folder filter active"
+                  aria-label="Folder filter active"
+                />
+              )}
+            </button>
 
-            {folders.length === 0 ? (
-              <p className="empty-hint small">
-                No folders yet. Click "Add folder" to get started.
-              </p>
-            ) : (
-              <ul className="folder-list">
-                {folders.map((f) => {
-                  const isActiveFilter = libraryFolderFilter === f.id;
-                  return (
-                    <li
-                      key={f.id}
-                      className={`folder-item ${isActiveFilter ? 'active' : ''}`}
-                      onClick={() => toggleFolderFilter(f.id)}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        openContextMenu({
-                          kind: 'folder',
-                          id: f.id,
-                          x: e.clientX,
-                          y: e.clientY
-                        });
-                      }}
-                      title={
-                        isActiveFilter
-                          ? 'Click to show all tracks'
-                          : 'Click to filter library by this folder'
-                      }
-                    >
-                      <span className="folder-path" title={f.path}>
-                        {f.path}
-                      </span>
-                      <button
-                        className="icon-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeFolder(f.id);
-                        }}
-                        title="Remove folder"
-                      >
-                        ×
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+            {foldersExpanded && (
+              <>
+                {folders.length === 0 ? (
+                  <p className="empty-hint small">
+                    No folders yet. Click "Add folder" to get started.
+                  </p>
+                ) : (
+                  <ul className="folder-list">
+                    {folders.map((f) => {
+                      const isActiveFilter = libraryFolderFilter === f.id;
+                      return (
+                        <li
+                          key={f.id}
+                          className={`folder-item ${isActiveFilter ? 'active' : ''
+                            }`}
+                          onClick={() => toggleFolderFilter(f.id)}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            openContextMenu({
+                              kind: 'folder',
+                              id: f.id,
+                              x: e.clientX,
+                              y: e.clientY
+                            });
+                          }}
+                          title={
+                            isActiveFilter
+                              ? 'Click to show all tracks'
+                              : 'Click to filter library by this folder'
+                          }
+                        >
+                          <span className="folder-path" title={f.path}>
+                            {f.path}
+                          </span>
+                          <button
+                            className="icon-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeFolder(f.id);
+                            }}
+                            title="Remove folder"
+                          >
+                            ×
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </>
             )}
           </div>
 
@@ -176,6 +218,8 @@ export default function App(): JSX.Element {
         </aside>
 
         <main className="main-pane">
+          <MediaSurface />
+
           {activePlaylist ? (
             <PlaylistView />
           ) : (
@@ -183,9 +227,11 @@ export default function App(): JSX.Element {
               {continueTrack && (
                 <div className="continue-banner">
                   <div className="continue-info">
-                    <span className="continue-label">Continue listening</span>
+                    <span className="continue-label">
+                      Continue listening
+                    </span>
                     <span className="continue-title">
-                      {continueTrack.title ?? '(untitled)'}
+                      {basename(continueTrack.path)}
                     </span>
                   </div>
                   <button className="continue-btn" onClick={handleContinue}>
@@ -205,15 +251,25 @@ export default function App(): JSX.Element {
                       ({filteredTracks.length} of {libraryTracks.length})
                     </>
                   ) : (
-                    <>Library ({libraryTracks.length})</>
+                    <>Library ({filteredTracks.length})</>
                   )}
                 </h2>
-                {filteredFolder && (
-                  <button
-                    className="link-btn"
-                    onClick={() => setLibraryFolderFilter(null)}
-                  >
-                    Clear filter
+
+                <div className="media-filter">
+                  {(['all', 'audio', 'video'] as const).map((f) => (
+                    <button
+                      key={f}
+                      className={libraryMediaFilter === f ? 'active' : ''}
+                      onClick={() => setLibraryMediaFilter(f)}
+                    >
+                      {f === 'all' ? 'All' : f === 'audio' ? 'Audio' : 'Video'}
+                    </button>
+                  ))}
+                </div>
+
+                {hasActiveFilter && (
+                  <button className="link-btn" onClick={clearAllFilters}>
+                    Clear filters
                   </button>
                 )}
               </div>
@@ -232,7 +288,9 @@ export default function App(): JSX.Element {
                   No tracks yet. Add a folder and rescan the library.
                 </p>
               ) : filteredTracks.length === 0 ? (
-                <p className="empty-hint">No tracks in this folder.</p>
+                <p className="empty-hint">
+                  No tracks match the current filters.
+                </p>
               ) : (
                 <ul className="track-list">
                   {filteredTracks.map((t) => (
@@ -252,14 +310,21 @@ export default function App(): JSX.Element {
                       }}
                     >
                       <div className="track-main">
-                        <div className="track-title">{basename(t.path)}</div>
+                        <div className="track-title">
+                          {t.media_type === 'video' && (
+                            <span className="video-badge">▶</span>
+                          )}
+                          {basename(t.path)}
+                        </div>
                         <div className="track-meta">
                           {t.artist ?? ''}
                           {t.artist && t.album ? ' — ' : ''}
                           {t.album ?? ''}
                         </div>
                       </div>
-                      <div className="track-duration">{formatDuration(t.duration)}</div>
+                      <div className="track-duration">
+                        {formatDuration(t.duration)}
+                      </div>
                     </li>
                   ))}
                 </ul>
