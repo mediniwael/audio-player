@@ -1,4 +1,4 @@
-import { JSX, useEffect, useRef, useState } from 'react';
+import { JSX, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
 import { play, playFromStart } from '../controllers/mediaController';
 
@@ -21,6 +21,10 @@ export default function ContextMenu(): JSX.Element | null {
 
     const ref = useRef<HTMLDivElement>(null);
     const [showPlaylists, setShowPlaylists] = useState(false);
+    const [menuPosition, setMenuPosition] = useState<{
+        left: number;
+        top: number;
+    } | null>(null);
 
     useEffect(() => {
         if (!contextMenu) {
@@ -43,11 +47,45 @@ export default function ContextMenu(): JSX.Element | null {
         };
     }, [contextMenu, closeContextMenu]);
 
+    useLayoutEffect(() => {
+        if (!contextMenu) {
+            setMenuPosition(null);
+            return;
+        }
+        const target = contextMenu;
+
+        function updatePosition(): void {
+            const menu = ref.current;
+            if (!menu) return;
+
+            const { width, height } = menu.getBoundingClientRect();
+            const margin = 8;
+            const left = Math.max(
+                margin,
+                Math.min(target.x, window.innerWidth - width - margin)
+            );
+            const top = Math.max(
+                margin,
+                Math.min(target.y, window.innerHeight - height - margin)
+            );
+
+            setMenuPosition((current) =>
+                current?.left === left && current.top === top
+                    ? current
+                    : { left, top }
+            );
+        }
+
+        updatePosition();
+        window.addEventListener('resize', updatePosition);
+        return () => window.removeEventListener('resize', updatePosition);
+    }, [contextMenu, playlists, showPlaylists]);
+
     if (!contextMenu) return null;
 
     const menuStyle: React.CSSProperties = {
-        left: contextMenu.x,
-        top: contextMenu.y
+        left: menuPosition?.left ?? contextMenu.x,
+        top: menuPosition?.top ?? contextMenu.y
     };
 
     // ---------- Folder menu ----------

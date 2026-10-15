@@ -19,3 +19,4 @@ export const createUiSlice: StateCreator<Store, [], [], UiSlice> = (set) => ({
   openContextMenu: (target) => set({ contextMenu: target }),
   closeContextMenu: () => set({ contextMenu: null })
 });
+
