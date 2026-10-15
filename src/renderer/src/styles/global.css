@@ -514,11 +514,9 @@ button:disabled {
 }
 
 .context-submenu {
-    position: absolute;
-    left: 100%;
-    top: 0;
-    margin-left: 4px;
+    position: fixed;
     min-width: 180px;
+    max-width: calc(100vw - 16px);
     background: var(--bg-elevated);
     border: 1px solid var(--border);
     border-radius: 6px;

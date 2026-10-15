@@ -20,10 +20,17 @@ export default function ContextMenu(): JSX.Element | null {
     const loadActivePlaylist = useStore((s) => s.loadActivePlaylist);
 
     const ref = useRef<HTMLDivElement>(null);
+    const addPlaylistRef = useRef<HTMLButtonElement>(null);
+    const submenuRef = useRef<HTMLDivElement>(null);
     const [showPlaylists, setShowPlaylists] = useState(false);
     const [menuPosition, setMenuPosition] = useState<{
         left: number;
         top: number;
+    } | null>(null);
+    const [submenuPosition, setSubmenuPosition] = useState<{
+        left: number;
+        top: number;
+        maxHeight: number;
     } | null>(null);
 
     useEffect(() => {
@@ -31,6 +38,7 @@ export default function ContextMenu(): JSX.Element | null {
             setShowPlaylists(false);
             return;
         }
+        setShowPlaylists(false);
         function onDown(e: MouseEvent): void {
             if (ref.current && !ref.current.contains(e.target as Node)) {
                 closeContextMenu();
@@ -79,6 +87,58 @@ export default function ContextMenu(): JSX.Element | null {
         updatePosition();
         window.addEventListener('resize', updatePosition);
         return () => window.removeEventListener('resize', updatePosition);
+    }, [contextMenu, playlists, showPlaylists]);
+
+    useLayoutEffect(() => {
+        if (!contextMenu || !showPlaylists) {
+            setSubmenuPosition(null);
+            return;
+        }
+
+        function updateSubmenuPosition(): void {
+            const submenu = submenuRef.current;
+            const trigger = addPlaylistRef.current;
+            const menu = ref.current;
+            if (!submenu || !trigger || !menu) return;
+
+            const margin = 8;
+            const submenuRect = submenu.getBoundingClientRect();
+            const menuRect = menu.getBoundingClientRect();
+            const triggerRect = trigger.getBoundingClientRect();
+            const right = menuRect.right + 4;
+            const left = menuRect.left - submenuRect.width - 4;
+            const leftCandidate =
+                right + submenuRect.width <= window.innerWidth - margin
+                    ? right
+                    : left;
+            const maxHeight = Math.max(
+                0,
+                Math.min(300, window.innerHeight - margin * 2)
+            );
+            const top = Math.max(
+                margin,
+                Math.min(
+                    triggerRect.top,
+                    window.innerHeight - maxHeight - margin
+                )
+            );
+
+            setSubmenuPosition({
+                left: Math.max(
+                    margin,
+                    Math.min(
+                        leftCandidate,
+                        window.innerWidth - submenuRect.width - margin
+                    )
+                ),
+                top,
+                maxHeight
+            });
+        }
+
+        updateSubmenuPosition();
+        window.addEventListener('resize', updateSubmenuPosition);
+        return () => window.removeEventListener('resize', updateSubmenuPosition);
     }, [contextMenu, playlists, showPlaylists]);
 
     if (!contextMenu) return null;
@@ -164,12 +224,22 @@ export default function ContextMenu(): JSX.Element | null {
                 <div className="context-divider" />
                 <button
                     className="context-item"
+                    ref={addPlaylistRef}
                     onMouseEnter={() => setShowPlaylists(true)}
                 >
                     Add to playlist ▸
                 </button>
                 {showPlaylists && (
-                    <div className="context-submenu">
+                    <div
+                        className="context-submenu"
+                        ref={submenuRef}
+                        style={{
+                            left: submenuPosition?.left ?? 0,
+                            top: submenuPosition?.top ?? 0,
+                            maxHeight: submenuPosition?.maxHeight,
+                            visibility: submenuPosition ? 'visible' : 'hidden'
+                        }}
+                    >
                         <button
                             className="context-item"
                             onClick={() => void handleNewPlaylist()}
