@@ -47,6 +47,10 @@ const api: AppApi = {
       ipcRenderer.on('scan:done', (_e, data) => cb(data)),
     scanFinished: (cb) =>
       ipcRenderer.on('scan:finished', (_e, data) => cb(data))
+  },
+  files: {
+    saveJson: (defaultName, content) =>
+      ipcRenderer.invoke('files:saveJson', defaultName, content)
   }
 };
 

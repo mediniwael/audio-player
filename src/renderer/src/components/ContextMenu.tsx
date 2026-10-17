@@ -6,6 +6,8 @@ export default function ContextMenu(): JSX.Element | null {
     const contextMenu = useStore((s) => s.contextMenu);
     const closeContextMenu = useStore((s) => s.closeContextMenu);
 
+    const requestPlaylistAction = useStore((s) => s.requestPlaylistAction);
+
     const playlists = useStore((s) => s.playlists);
     const folders = useStore((s) => s.folders);
     const libraryTracks = useStore((s) => s.libraryTracks);
@@ -178,6 +180,35 @@ export default function ContextMenu(): JSX.Element | null {
             <div className="context-menu" style={menuStyle} ref={ref}>
                 <button className="context-item" onClick={() => void handleCreate()}>
                     Create playlist from folder
+                </button>
+            </div>
+        );
+    }
+
+    // ---------- Playlist menu ----------
+    if (contextMenu.kind === 'playlist') {
+        const playlist = playlists.find((p) => p.id === contextMenu.id);
+        if (!playlist) return null;
+
+        return (
+            <div className="context-menu" style={menuStyle} ref={ref}>
+                <button
+                    className="context-item"
+                    onClick={() => {
+                        requestPlaylistAction('rename', playlist.id);
+                        closeContextMenu();
+                    }}
+                >
+                    Rename
+                </button>
+                <button
+                    className="context-item danger"
+                    onClick={() => {
+                        requestPlaylistAction('delete', playlist.id);
+                        closeContextMenu();
+                    }}
+                >
+                    Delete
                 </button>
             </div>
         );

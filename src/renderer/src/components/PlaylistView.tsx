@@ -2,6 +2,7 @@ import { JSX, useState } from 'react';
 import { useStore } from '../store';
 import { play } from '../controllers/mediaController';
 import PlaylistEntryRow from './PlaylistEntryRow';
+import { basename } from '../utils/format';
 import type { PlaylistEntry } from '../../../shared/api';
 
 export default function PlaylistView(): JSX.Element {
@@ -81,6 +82,22 @@ export default function PlaylistView(): JSX.Element {
         setDragOverId(null);
     }
 
+    async function handleExportJson(): Promise<void> {
+        if (!activePlaylist) return;
+        const data = activePlaylist.entries.map((entry, i) => ({
+            index: i + 1,
+            filename: basename(entry.track.path),
+            duration: Math.floor(entry.track.duration ?? 0)
+        }));
+
+        const json = JSON.stringify(data, null, 4);
+        const sanitized = activePlaylist.playlist.name.replace(/[<>:"/\\|?*]/g, '_');
+        const saved = await window.api.files.saveJson(`${sanitized}.json`, json);
+        if (!saved) {
+            // user cancelled — nothing to do
+        }
+    }
+
     return (
         <div className="main-pane">
             <div className="playlist-header">
@@ -107,7 +124,9 @@ export default function PlaylistView(): JSX.Element {
                     >
                         {playlist.name}
                     </h2>
+                    
                 )}
+                
                 <span className="playlist-total">{entries.length} tracks</span>
 
                 {cursorEntryId !== null && (
@@ -115,6 +134,13 @@ export default function PlaylistView(): JSX.Element {
                         ▶ Resume
                     </button>
                 )}
+                <button
+                    className="icon-btn"
+                    onClick={() => void handleExportJson()}
+                    title="Export playlist as JSON"
+                >
+                    Export JSON
+                </button>
             </div>
 
             {entries.length === 0 ? (

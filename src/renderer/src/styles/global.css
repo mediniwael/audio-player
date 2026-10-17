@@ -723,3 +723,8 @@ button:disabled {
     background: var(--accent);
     margin-left: 2px;
 }
+
+.playlist-header .icon-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+}

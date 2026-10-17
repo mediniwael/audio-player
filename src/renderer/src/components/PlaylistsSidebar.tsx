@@ -2,7 +2,6 @@ import { JSX, useEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
 
 export default function PlaylistsSidebar(): JSX.Element {
-    // ---------- Store ----------
     const playlists = useStore((s) => s.playlists);
     const activePlaylist = useStore((s) => s.activePlaylist);
     const createPlaylist = useStore((s) => s.createPlaylist);
@@ -11,7 +10,12 @@ export default function PlaylistsSidebar(): JSX.Element {
     const loadActivePlaylist = useStore((s) => s.loadActivePlaylist);
     const clearActivePlaylist = useStore((s) => s.clearActivePlaylist);
 
-    // ---------- Local UI state ----------
+    const openContextMenu = useStore((s) => s.openContextMenu);
+    const playlistActionRequest = useStore((s) => s.playlistActionRequest);
+    const clearPlaylistActionRequest = useStore(
+        (s) => s.clearPlaylistActionRequest
+    );
+
     const [creating, setCreating] = useState(false);
     const [newName, setNewName] = useState('');
 
@@ -25,15 +29,12 @@ export default function PlaylistsSidebar(): JSX.Element {
     const createInputRef = useRef<HTMLInputElement>(null);
     const renameInputRef = useRef<HTMLInputElement>(null);
 
-    // Focus the create input when it appears. autoFocus is unreliable after
-    // native dialogs close, so we do it explicitly.
     useEffect(() => {
         if (creating && createInputRef.current) {
             createInputRef.current.focus();
         }
     }, [creating]);
 
-    // Same for the rename input.
     useEffect(() => {
         if (renamingId !== null && renameInputRef.current) {
             renameInputRef.current.focus();
@@ -41,7 +42,26 @@ export default function PlaylistsSidebar(): JSX.Element {
         }
     }, [renamingId]);
 
-    // Clear the pending delete confirmation if the user clicks elsewhere.
+    // React to context-menu actions (rename / delete).
+    useEffect(() => {
+        if (!playlistActionRequest) return;
+        const req = playlistActionRequest;
+        clearPlaylistActionRequest();
+
+        if (req.kind === 'rename') {
+            const playlist = playlists.find((p) => p.id === req.id);
+            if (playlist) {
+                setConfirmingDeleteId(null);
+                setRenamingId(req.id);
+                setRenameValue(playlist.name);
+            }
+        } else if (req.kind === 'delete') {
+            setRenamingId(null);
+            setConfirmingDeleteId(req.id);
+        }
+    }, [playlistActionRequest, playlists, clearPlaylistActionRequest]);
+
+    // Dismiss pending delete if the user clicks elsewhere.
     useEffect(() => {
         if (confirmingDeleteId === null) return;
         function onDown(e: MouseEvent): void {
@@ -54,7 +74,6 @@ export default function PlaylistsSidebar(): JSX.Element {
         return () => window.removeEventListener('mousedown', onDown);
     }, [confirmingDeleteId]);
 
-    // ---------- Create ----------
     async function submitCreate(): Promise<void> {
         const name = newName.trim();
         if (!name) {
@@ -73,13 +92,6 @@ export default function PlaylistsSidebar(): JSX.Element {
         setNewName('');
     }
 
-    // ---------- Rename ----------
-    function startRename(id: number, current: string): void {
-        setConfirmingDeleteId(null);
-        setRenamingId(id);
-        setRenameValue(current);
-    }
-
     async function submitRename(): Promise<void> {
         if (renamingId === null) return;
         const name = renameValue.trim();
@@ -95,11 +107,6 @@ export default function PlaylistsSidebar(): JSX.Element {
         setRenameValue('');
     }
 
-    // ---------- Delete ----------
-    function requestDelete(id: number): void {
-        setConfirmingDeleteId(id);
-    }
-
     async function confirmDelete(id: number): Promise<void> {
         setConfirmingDeleteId(null);
         await deletePlaylist(id);
@@ -109,7 +116,6 @@ export default function PlaylistsSidebar(): JSX.Element {
         setConfirmingDeleteId(null);
     }
 
-    // ---------- Navigation ----------
     async function openPlaylist(id: number): Promise<void> {
         await loadActivePlaylist(id);
         void window.api.settings.set('library.last_view', `playlist:${id}`);
@@ -120,7 +126,19 @@ export default function PlaylistsSidebar(): JSX.Element {
         void window.api.settings.set('library.last_view', 'library');
     }
 
-    // ---------- Render ----------
+    function handlePlaylistContextMenu(
+        e: React.MouseEvent,
+        id: number
+    ): void {
+        e.preventDefault();
+        openContextMenu({
+            kind: 'playlist',
+            id,
+            x: e.clientX,
+            y: e.clientY
+        });
+    }
+
     return (
         <div className="playlists-sidebar sidebar-section">
             <div className="sidebar-section-header">
@@ -144,7 +162,6 @@ export default function PlaylistsSidebar(): JSX.Element {
                     placeholder="Playlist name"
                     onChange={(e) => setNewName(e.target.value)}
                     onBlur={() => {
-                        // Commit if there's content; otherwise leave open.
                         if (newName.trim()) void submitCreate();
                     }}
                     onKeyDown={(e) => {
@@ -172,6 +189,7 @@ export default function PlaylistsSidebar(): JSX.Element {
                             <li
                                 key={p.id}
                                 className={`playlist-item ${isActive ? 'active' : ''}`}
+                                onContextMenu={(e) => handlePlaylistContextMenu(e, p.id)}
                             >
                                 {isRenaming ? (
                                     <input
@@ -201,7 +219,7 @@ export default function PlaylistsSidebar(): JSX.Element {
                                         </span>
                                         <span className="playlist-count">{p.trackCount}</span>
 
-                                        {isConfirmingDelete ? (
+                                        {isConfirmingDelete && (
                                             <span className="playlist-delete-confirm">
                                                 <button
                                                     className="icon-btn small danger"
@@ -218,23 +236,6 @@ export default function PlaylistsSidebar(): JSX.Element {
                                                     ✕
                                                 </button>
                                             </span>
-                                        ) : (
-                                            <>
-                                                <button
-                                                    className="icon-btn small"
-                                                    onClick={() => startRename(p.id, p.name)}
-                                                    title="Rename"
-                                                >
-                                                    ✎
-                                                </button>
-                                                <button
-                                                    className="icon-btn small"
-                                                    onClick={() => requestDelete(p.id)}
-                                                    title="Delete"
-                                                >
-                                                    ×
-                                                </button>
-                                            </>
                                         )}
                                     </>
                                 )}

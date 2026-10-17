@@ -109,4 +109,7 @@ export interface AppApi {
     scanDone: (cb: (data: ScanResult) => void) => void;
     scanFinished: (cb: (results: ScanResult[]) => void) => void;
   };
+  files: {
+    saveJson: (defaultName: string, content: string) => Promise<boolean>;
+  };
 }

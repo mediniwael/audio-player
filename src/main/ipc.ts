@@ -1,5 +1,6 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron';
 import * as db from './db';
+import fs from 'fs/promises';
 import { scanLibrary } from './scanner';
 
 export function registerIpcHandlers(): void {
@@ -137,4 +138,20 @@ export function registerIpcHandlers(): void {
     }
     db.setSetting(key, value);
   });
+
+  ipcMain.handle(
+    'files:saveJson',
+    async (_e, defaultName: string, content: string) => {
+      if (typeof defaultName !== 'string' || typeof content !== 'string') {
+        throw new Error('invalid saveJson args');
+      }
+      const result = await dialog.showSaveDialog({
+        defaultPath: defaultName,
+        filters: [{ name: 'JSON', extensions: ['json'] }]
+      });
+      if (result.canceled || !result.filePath) return false;
+      await fs.writeFile(result.filePath, content, 'utf-8');
+      return true;
+    }
+  );
 }
